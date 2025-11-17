@@ -10,6 +10,7 @@ import (
 
 
 func rightrotate(x uint32, k int) uint32 {
+	k = k % 32
 	return bits.RotateLeft32(x, 32 - k)
 
 }
