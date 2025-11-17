@@ -8,10 +8,12 @@ import (
 	"os"
 )
 
-
+// rightrotate rotates the 32-bit unsigned integer `x` right by `k` bits.
+// `k` is reduced modulo 32 before rotation. The function uses
+// `bits.RotateLeft32` with `32-k` to implement a right rotation.
 func rightrotate(x uint32, k int) uint32 {
 	k = k % 32
-	return bits.RotateLeft32(x, 32 - k)
+	return bits.RotateLeft32(x, 32-k)
 
 }
 
@@ -24,7 +26,7 @@ var h5 uint32 = 0x9b05688c
 var h6 uint32 = 0x1f83d9ab
 var h7 uint32 = 0x5be0cd19
 
-var k []uint32 = []uint32 {
+var k []uint32 = []uint32{
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
 	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
 	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -35,9 +37,12 @@ var k []uint32 = []uint32 {
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 }
 
+// toUInt converts the byte slice `data` into big-endian `uint32` words
+// and writes them into the provided `out` slice. It returns the number
+// of words written. The function reads 4 bytes at a time; any final
+// partial chunk (less than 4 bytes) is ignored.
 func toUInt(data []byte, out []uint32) int {
 	buf := bytes.NewBuffer(data)
-	nOut := 1 + (len(data) / 4)
 	i := 0
 	for {
 		x := buf.Next(4)
@@ -48,32 +53,45 @@ func toUInt(data []byte, out []uint32) int {
 		i += 1
 
 	}
-	fmt.Printf("i: %d, nOut: %d", i, nOut)
 	return i
 }
 
+// main computes and prints the SHA-256 digest of the first
+// command-line argument. It performs message padding, processes
+// the message in 512-bit chunks using the SHA-256 compression
+// function, and prints the 32-byte digest in hexadecimal.
 func main() {
-	message := []byte(os.Args[1])
-	messageLen := len(message)
+	if len(os.Args) < 2 {
+		fmt.Println("didn't receive an argument. there should be an argument here.")
+		return
+	}
+	msg := []byte(os.Args[1])
+	ogBitLen := uint64(len(msg) * 8)
+	neededLenBits := ogBitLen + 1            // add the following 1 bit
+	K := (448 - (neededLenBits % 512)) % 512 // add 0 bits until len %512 = 448
+	neededLenBits += K + 64                  // with the uint64 of the length.
+
+	message := make([]byte, neededLenBits/8)
+	copy(message, msg)
+
+	message[len(msg)] = 0x80
+	binary.BigEndian.PutUint64(message[(neededLenBits/8)-8:], ogBitLen) // length of original message at the end
 
 	buf := bytes.NewBuffer(message)
-	
-	nIter := 1 + ((messageLen * 8) / 512)
-	for x := range nIter {
+	for {
 		// chunk of 512 bits (64 bytes)
 		data := buf.Next(64)
+		if len(data) == 0 {
+			break
+		}
 		// set of 64 uint32 items.
 		w := make([]uint32, 64)
 		// convert each 4 bytes into a uint32. Store them in here.
 		nWordsInData := toUInt(data, w)
 
-		if nWordsInData < 16 {
-			fmt.Printf("Only received %d bytes, was hoping for 16\n", nWordsInData)
-			fmt.Printf("We are on loop %d and should be on loop %d\n", x, nIter)
-			// fill the rest with a single '1' bit and then the rest are zeros
-			tem := make([]byte, 2)// stores the value 0x10
-			binary.BigEndian.PutUint16(tem, uint16(8))
-			w[nWordsInData] = binary.BigEndian.Uint32(tem)// convert the 0x10 to uint32
+		if nWordsInData != 16 {
+			fmt.Println("I don't think I SHOULD BE HERE")
+			break
 		}
 
 		a := h0
@@ -86,20 +104,18 @@ func main() {
 		h := h7
 
 		//extend the first 16 words into the remaining 48 words
-		for i := 16; i <64; i++ {
+		for i := 16; i < 64; i++ {
 			s0 := rightrotate(w[i-15], 7) ^ rightrotate(w[i-15], 18) ^ (w[i-15] >> 3)
-			s1 := rightrotate(w[i-2], 17) ^ rightrotate(w[i-2], 19) ^ (w[i-2] >> 2)
+			s1 := rightrotate(w[i-2], 17) ^ rightrotate(w[i-2], 19) ^ (w[i-2] >> 10)
 			w[i] = w[i-16] + s0 + w[i-7] + s1
-
 		}
-
 		// compression function main loop:
 		for i := range 64 {
 			S1 := rightrotate(e, 6) ^ rightrotate(e, 11) ^ rightrotate(e, 25)
-			ch := (e & f) ^ (^e  & g)
+			ch := (e & f) ^ (^e & g)
 			temp1 := h + S1 + ch + k[i] + w[i]
 			S0 := rightrotate(a, 2) ^ rightrotate(a, 13) ^ rightrotate(a, 22)
-			maj := (a & b) ^ (a & c) ^ (a & c)
+			maj := (a & b) ^ (a & c) ^ (b & c)
 			temp2 := S0 + maj
 
 			h = g
