@@ -17,6 +17,18 @@ func rightrotate(x uint32, k int) uint32 {
 
 }
 
+type Hasher struct {
+	h [8]uint32
+	words [64]uint32
+}
+
+func NewHasher() *Hasher {
+	return &Hasher{
+		h: [8]uint32{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19},
+		words: [64]uint32{},
+	}
+}
+
 var h0 uint32 = 0x6a09e667
 var h1 uint32 = 0xbb67ae85
 var h2 uint32 = 0x3c6ef372
@@ -37,23 +49,112 @@ var k []uint32 = []uint32{
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 }
 
-// toUInt converts the byte slice `data` into big-endian `uint32` words
+// getWords converts the byte slice `data` into big-endian `uint32` words
 // and writes them into the provided `out` slice. It returns the number
 // of words written. The function reads 4 bytes at a time; any final
 // partial chunk (less than 4 bytes) is ignored.
-func toUInt(data []byte, out []uint32) int {
-	buf := bytes.NewBuffer(data)
-	i := 0
+func getWords(data *[64]byte, words *[64]uint32) {
+	for i := range 16 {
+		words[i] = binary.BigEndian.Uint32(data[4*i : 4*i+4])
+	}
+}
+
+
+func processChunk(chunk *[64]byte, words *[64]uint32) error {
+
+	// convert each 4 bytes into a uint32. Store them in here.
+	getWords(chunk, words)
+
+	a := h0
+	b := h1
+	c := h2
+	d := h3
+	e := h4
+	f := h5
+	g := h6
+	h := h7
+
+	//extend the first 16 words into the remaining 48 words
+	for i := 16; i < 64; i++ {
+		s0 := rightrotate(words[i-15], 7) ^ rightrotate(words[i-15], 18) ^ (words[i-15] >> 3)
+		s1 := rightrotate(words[i-2], 17) ^ rightrotate(words[i-2], 19) ^ (words[i-2] >> 10)
+		words[i] = words[i-16] + s0 + words[i-7] + s1
+	}
+	// compression function main loop:
+	for i := range 64 {
+		S1 := rightrotate(e, 6) ^ rightrotate(e, 11) ^ rightrotate(e, 25)
+		ch := (e & f) ^ (^e & g)
+		temp1 := h + S1 + ch + k[i] + words[i]
+		S0 := rightrotate(a, 2) ^ rightrotate(a, 13) ^ rightrotate(a, 22)
+		maj := (a & b) ^ (a & c) ^ (b & c)
+		temp2 := S0 + maj
+
+		h = g
+		g = f
+		f = e
+		e = d + temp1
+		d = c
+		c = b
+		b = a
+		a = temp1 + temp2
+	}
+	// add the compressed chunk to the current hash value
+	h0 = h0 + a
+	h1 = h1 + b
+	h2 = h2 + c
+	h3 = h3 + d
+	h4 = h4 + e
+	h5 = h5 + f
+	h6 = h6 + g
+	h7 = h7 + h
+
+	return nil
+
+}
+
+// SHA256Sum computes the SHA-256 hash of a byte array.
+func SHA256Sum(msg []byte) [32]byte {
+	ogBitLen := uint64(len(msg) * 8)         // original message length in bits
+	neededLenBits := ogBitLen + 1            // add the following 1 bit
+	K := (448 - (neededLenBits % 512)) % 512 // add 0 bits until len %512 = 448
+	neededLenBits += K + 64                  // with the uint64 of the length.
+
+	message := make([]byte, neededLenBits/8) // message as an array of bytes, padded correctly
+	copy(message, msg)
+
+	message[len(msg)] = 0x80
+	binary.BigEndian.PutUint64(message[(neededLenBits/8)-8:], ogBitLen) // length of original message at the end
+
+	buf := bytes.NewBuffer(message)
+
+	words := [64]uint32{}
+	chunk := [64]byte{}
+
 	for {
-		x := buf.Next(4)
-		if len(x) == 0 {
+		// chunk of 512 bits (64 bytes)
+		// chunk := buf.Next(64)
+		n, err := buf.Read(chunk[:])
+		fmt.Printf("Read %d bytes\n", n)
+		if n == 0 {
 			break
 		}
-		out[i] = binary.BigEndian.Uint32(x)
-		i += 1
-
+		if err != nil {
+			fmt.Printf("Got some error, %v", err)
+			break
+		}
+		processChunk(&chunk, &words)
 	}
-	return i
+
+	result := [32]byte{}
+	binary.BigEndian.PutUint32(result[0:], h0)
+	binary.BigEndian.PutUint32(result[4:], h1)
+	binary.BigEndian.PutUint32(result[8:], h2)
+	binary.BigEndian.PutUint32(result[12:], h3)
+	binary.BigEndian.PutUint32(result[16:], h4)
+	binary.BigEndian.PutUint32(result[20:], h5)
+	binary.BigEndian.PutUint32(result[24:], h6)
+	binary.BigEndian.PutUint32(result[28:], h7)
+	return result
 }
 
 // main computes and prints the SHA-256 digest of the first
@@ -65,88 +166,12 @@ func main() {
 		fmt.Println("didn't receive an argument. there should be an argument here.")
 		return
 	}
+	// take the message from a cmd line argument and store it as a byte array
 	msg := []byte(os.Args[1])
-	ogBitLen := uint64(len(msg) * 8)
-	neededLenBits := ogBitLen + 1            // add the following 1 bit
-	K := (448 - (neededLenBits % 512)) % 512 // add 0 bits until len %512 = 448
-	neededLenBits += K + 64                  // with the uint64 of the length.
 
-	message := make([]byte, neededLenBits/8)
-	copy(message, msg)
+	result := SHA256Sum(msg)
 
-	message[len(msg)] = 0x80
-	binary.BigEndian.PutUint64(message[(neededLenBits/8)-8:], ogBitLen) // length of original message at the end
-
-	buf := bytes.NewBuffer(message)
-	for {
-		// chunk of 512 bits (64 bytes)
-		data := buf.Next(64)
-		if len(data) == 0 {
-			break
-		}
-		// set of 64 uint32 items.
-		w := make([]uint32, 64)
-		// convert each 4 bytes into a uint32. Store them in here.
-		nWordsInData := toUInt(data, w)
-
-		if nWordsInData != 16 {
-			fmt.Println("I don't think I SHOULD BE HERE")
-			break
-		}
-
-		a := h0
-		b := h1
-		c := h2
-		d := h3
-		e := h4
-		f := h5
-		g := h6
-		h := h7
-
-		//extend the first 16 words into the remaining 48 words
-		for i := 16; i < 64; i++ {
-			s0 := rightrotate(w[i-15], 7) ^ rightrotate(w[i-15], 18) ^ (w[i-15] >> 3)
-			s1 := rightrotate(w[i-2], 17) ^ rightrotate(w[i-2], 19) ^ (w[i-2] >> 10)
-			w[i] = w[i-16] + s0 + w[i-7] + s1
-		}
-		// compression function main loop:
-		for i := range 64 {
-			S1 := rightrotate(e, 6) ^ rightrotate(e, 11) ^ rightrotate(e, 25)
-			ch := (e & f) ^ (^e & g)
-			temp1 := h + S1 + ch + k[i] + w[i]
-			S0 := rightrotate(a, 2) ^ rightrotate(a, 13) ^ rightrotate(a, 22)
-			maj := (a & b) ^ (a & c) ^ (b & c)
-			temp2 := S0 + maj
-
-			h = g
-			g = f
-			f = e
-			e = d + temp1
-			d = c
-			c = b
-			b = a
-			a = temp1 + temp2
-		}
-		// add the compressed chunk to the current hash value
-		h0 = h0 + a
-		h1 = h1 + b
-		h2 = h2 + c
-		h3 = h3 + d
-		h4 = h4 + e
-		h5 = h5 + f
-		h6 = h6 + g
-		h7 = h7 + h
-	}
-
-	result := make([]byte, 32)
-	binary.BigEndian.PutUint32(result, h0)
-	binary.BigEndian.PutUint32(result[4:], h1)
-	binary.BigEndian.PutUint32(result[8:], h2)
-	binary.BigEndian.PutUint32(result[12:], h3)
-	binary.BigEndian.PutUint32(result[16:], h4)
-	binary.BigEndian.PutUint32(result[20:], h5)
-	binary.BigEndian.PutUint32(result[24:], h6)
-	binary.BigEndian.PutUint32(result[28:], h7)
+	// Pad the message to proper length
 	fmt.Printf("Result:\n%x\n", result)
-
 }
+
