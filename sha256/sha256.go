@@ -1,4 +1,4 @@
-// Package gosha256 implements the SHA-256 algorithm
+// Package sha256 implements the SHA-256 algorithm
 package sha256
 
 import (
