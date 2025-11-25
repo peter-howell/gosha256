@@ -15,7 +15,7 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("didn't receive an argument, using stdin")
 		conn = bufio.NewReader(os.Stdin)
-		result := gosha256.SHA256Sum(conn)
+		result := sha256.SHA256Sum(conn)
 
 		// Pad the message to proper length
 		fmt.Printf("%x  -\n", *result)

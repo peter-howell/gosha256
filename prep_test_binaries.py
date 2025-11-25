@@ -15,9 +15,9 @@ while i < len(lines):
     words = line.split()
     if words[0] == "Msg":
         msg = words[2]
-        with open(f"messages/msg{messages}", "wb") as f:
+        with open(f"cmd/gosha256/messages/msg{messages}", "wb") as f:
             f.write(bytes.fromhex(msg))
-        with open(f"hashes/hash{messages}", "w") as f:
+        with open(f"cmd/gosha256/hashes/hash{messages}", "w") as f:
             f.write(lines[i+1].split()[2])
         messages += 1
         i += 2
