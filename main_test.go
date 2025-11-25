@@ -12,10 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func loadKnownValues() ([][]byte, []string, error) {
-	const nFiles = 64
+const NFiles = 64
+const HexStringHashLen = 64
 
-	sizes := make([]int, nFiles)
+func loadKnownValues() ([][]byte, []string, error) {
+
+	sizes := make([]int, NFiles)
 	f, err := os.Open("message-sizes.txt")
 	if err != nil {
 		return nil, nil, err
@@ -24,19 +26,19 @@ func loadKnownValues() ([][]byte, []string, error) {
 	scanner.Split(bufio.ScanLines)
 	lineNum := 0
 	for scanner.Scan() {
-		sizes[lineNum], err = strconv.Atoi(scanner.Text())
+		bitLen, err := strconv.Atoi(scanner.Text())
 		if err != nil {
 			return nil, nil, err
 		}
-		sizes[lineNum] = sizes[lineNum] / 8
+		sizes[lineNum] = bitLen / 8 // byte length
 		lineNum ++
 
 	}
-	msgs := make([][]byte, nFiles)
-	hashes := make([]string, nFiles)
-	tempHash := make([]byte, 64)
+	msgs := make([][]byte, NFiles)
+	hashes := make([]string, NFiles)
+	tempHash := make([]byte, HexStringHashLen)
 
-	for i := range nFiles {
+	for i := range NFiles {
 		msgF, hashF := fmt.Sprintf("messages/msg%d", i), fmt.Sprintf("hashes/hash%d", i)
 		msgFile, err := os.Open(msgF)
 		if err != nil {
@@ -76,8 +78,7 @@ func TestSum256_KnownVectors(t *testing.T) {
 
 	msgs, hashes, err := loadKnownValues()
 	assert.Nil(t, err)
-	for i := range 10 {
-		fmt.Printf("msg %d is :%x\n", i, msgs[i])
+	for i := range NFiles {
 		got := SHA256Sum(bytes.NewBuffer(msgs[i]))
 		want := hashes[i]
 		assert.Equal(t, want, fmt.Sprintf("%x", string(got[:])))
