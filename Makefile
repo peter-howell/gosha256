@@ -1,4 +1,4 @@
-BINARY_NAME=my-sha256
+BINARY_NAME=gosha256
 
 build:
 	go build -o ${BINARY_NAME} main.go
