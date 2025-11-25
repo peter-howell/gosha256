@@ -2,15 +2,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/peter-howell/gosha256/sha256"
+	"github.com/stretchr/testify/assert"
 )
 
 const NFiles = 64
@@ -80,9 +79,12 @@ func TestSum256_KnownVectors(t *testing.T) {
 	msgs, hashes, err := loadKnownValues()
 	assert.Nil(t, err)
 	for i := range NFiles {
-		got := sha256.SHA256Sum(bytes.NewBuffer(msgs[i]))
+		msg := msgs[i]
+		hasher := sha256.NewHasher()
+		hasher.Write(msg)
+		got := hasher.Sum()
 		want := hashes[i]
-		assert.Equal(t, want, fmt.Sprintf("%x", string(got[:])))
+		assert.Equal(t, want, fmt.Sprintf("%x", got))
 	}
 }
 
