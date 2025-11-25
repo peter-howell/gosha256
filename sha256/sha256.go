@@ -1,5 +1,5 @@
 // Package gosha256 implements the SHA-256 algorithm
-package gosha256
+package sha256
 
 import (
 	"encoding/binary"
