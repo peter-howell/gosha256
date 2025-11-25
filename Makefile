@@ -7,3 +7,4 @@ test: ${BINARY_NAME}
 	grep "Len = " SHA256LongMsg.rsp | sed 's/Len = //' > message-sizes.txt
 	python prep_test_binaries.py
 	go test .
+
