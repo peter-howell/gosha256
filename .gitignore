@@ -1,4 +1,5 @@
 cmd/gosha256/hashes
 cmd/gosha256/messages
 cmd/gosha256/message-sizes.txt
+/gosha256
 
