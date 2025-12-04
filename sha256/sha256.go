@@ -20,6 +20,18 @@ var k [64]uint32 = [64]uint32{
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 }
 
+const (
+	h0 = uint32(0x6a09e667)
+	h1 = uint32(0xbb67ae85)
+	h2 = uint32(0x3c6ef372)
+	h3 = uint32(0xa54ff53a)
+	h4 = uint32(0x510e527f)
+	h5 = uint32(0x9b05688c)
+	h6 = uint32(0x1f83d9ab)
+	h7 = uint32(0x5be0cd19)
+
+)
+
 // rightrotate rotates the 32-bit unsigned integer `x` right by `k` bits.
 // `k` is reduced modulo 32 before rotation. The function uses
 // `bits.RotateLeft32` with `32-k` to implement a right rotation.
@@ -29,6 +41,7 @@ func rightrotate(x uint32, k int) uint32 {
 
 }
 
+
 type Hasher struct {
 	h [8]uint32 // hash values
 	words [64]uint32 // storage for the words
@@ -37,14 +50,23 @@ type Hasher struct {
 	chunkLen int
 }
 
+
+
 func NewHasher() *Hasher {
 	return &Hasher{
-		h: [8]uint32{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19},
+		h: [8]uint32{h0, h1, h2, h3, h4, h5, h6, h7},
 		words: [64]uint32{},
 		chunkBuf: [ChunkBytes]byte{},
 		nBitsRead: 0,
 		chunkLen: 0,
 	}
+}
+
+func (hasher *Hasher) Reset() {
+	hasher.h = [8]uint32{h0, h1, h2, h3, h4, h5, h6, h7}
+	hasher.nBitsRead = 0
+	hasher.chunkLen = 0
+	hasher.chunkBuf = [ChunkBytes]byte{}
 }
 
 // getWords converts the 64 byte message into 16 big-endian `uint32` words
